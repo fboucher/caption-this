@@ -23,7 +23,7 @@ Content-Type: application/json
     "messages": [
         {
         "role": "user",
-        "content": "What is happening in this video? Reply using this format: {{RESPONSE_FORMAT}}"
+        "content": "What is happening in this video? Reply using text only (no markdown) filling those 4 sections {{RESPONSE_FORMAT}}"
         }
     ]
 }

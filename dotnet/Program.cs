@@ -126,7 +126,7 @@ class Program
             var message = new
             {
                 role = "user",
-                content = $"What is happening in this video? Reply using this format: {responseFormat}"
+                content = $"What is happening in this video? Reply using text only (no markdown) filling those 4 sections: {responseFormat}"
             };
 
             var requestBody = new
@@ -275,7 +275,6 @@ class Program
 
         try
         {
-            // Try to pretty-print JSON
             var jsonDocument = JsonDocument.Parse(responseBody);
             var options = new JsonSerializerOptions { WriteIndented = true };
             string prettyJson = JsonSerializer.Serialize(jsonDocument.RootElement, options);
@@ -283,7 +282,6 @@ class Program
         }
         catch
         {
-            // If not JSON, just print as-is
             Console.WriteLine(responseBody);
         }
     }
@@ -294,23 +292,22 @@ class Program
     {
         Console.WriteLine($"Status Code: {response.StatusCode}");
         string responseBody = await response.Content.ReadAsStringAsync();
+        
+        // await SaveToFile(responseBody, "raw_captioned.json");
 
         try
         {
             var jsonDocument = JsonDocument.Parse(responseBody);
             
-            // Extract and parse the nested chat_response JSON string
             if (jsonDocument.RootElement.TryGetProperty("chat_response", out JsonElement chatResponseElement))
             {
                 string chatResponseString = chatResponseElement.GetString() ?? "";
-                
-                // Parse the nested JSON string
+
                 var chatResponseDoc = JsonDocument.Parse(chatResponseString);
-                
-                // Extract markdown from sections array
-                var markdownList = new List<string>();
-                
-                if (chatResponseDoc.RootElement.TryGetProperty("sections", out JsonElement sectionsElement) 
+
+                var stringBuilder = new StringBuilder();
+
+                if (chatResponseDoc.RootElement.TryGetProperty("sections", out JsonElement sectionsElement)
                     && sectionsElement.ValueKind == JsonValueKind.Array)
                 {
                     foreach (JsonElement section in sectionsElement.EnumerateArray())
@@ -320,29 +317,15 @@ class Program
                             string? markdown = markdownElement.GetString();
                             if (!string.IsNullOrEmpty(markdown))
                             {
-                                markdownList.Add(markdown);
+                                stringBuilder.Append(markdown);
                             }
                         }
                     }
                 }
-                
-                // Create a clean structure with the extracted markdown
-                var cleanResponse = new
-                {
-                    status = jsonDocument.RootElement.GetProperty("status").GetString(),
-                    sections_markdown = markdownList
-                };
-                
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                string cleanJson = JsonSerializer.Serialize(cleanResponse, options);
-                
-                string dataFolder = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data");
-                Directory.CreateDirectory(dataFolder);
-                string filePath = Path.Combine(dataFolder, "video_captioned.json");
-                
-                await File.WriteAllTextAsync(filePath, cleanJson);
-                Console.WriteLine($"\n✅ Response saved to {filePath}\n");
-                Console.WriteLine(cleanJson);
+
+                string cleanText = stringBuilder.ToString();
+                await SaveToFile(cleanText, "video_captioned.json");
+                Console.WriteLine(cleanText);
             }
             else
             {
@@ -350,12 +333,7 @@ class Program
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 string prettyJson = JsonSerializer.Serialize(jsonDocument.RootElement, options);
                 
-                string dataFolder = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data");
-                Directory.CreateDirectory(dataFolder);
-                string filePath = Path.Combine(dataFolder, "video_captioned.json");
-                
-                await File.WriteAllTextAsync(filePath, prettyJson);
-                Console.WriteLine($"\n✅ Response saved to {filePath}\n");
+                await SaveToFile(prettyJson, "video_bak_captioned.json");
                 Console.WriteLine(prettyJson);
             }
         }
@@ -364,5 +342,14 @@ class Program
             Console.WriteLine($"⚠️  Error parsing response: {ex.Message}");
             Console.WriteLine(responseBody);
         }
+    }
+
+    private static async Task SaveToFile(string cleanJson, string fileName)
+    {
+        string dataFolder = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data");
+        Directory.CreateDirectory(dataFolder);
+        string filePath = Path.Combine(dataFolder, fileName);
+        await File.WriteAllTextAsync(filePath, cleanJson);
+        Console.WriteLine($"\n✅ Response saved to {filePath}\n");
     }
 }
