@@ -217,7 +217,20 @@ class Program
                 var fileContent = new ByteArrayContent(File.ReadAllBytes(filePath));
                 fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
                 form.Add(fileContent, "images", fileName);
-                form.Add(new StringContent("metadata"), "metadata");
+
+                var metadata = new
+                {
+                    requests = new[]
+                    {
+                        new
+                        {
+                            indexing_config = new { index = true },
+                            metadata = new { }
+                        }
+                    }
+                };
+                var metadataJson = JsonSerializer.Serialize(metadata);
+                form.Add(new StringContent(metadataJson), "metadata");
 
                 var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/images/upload")
                 {
