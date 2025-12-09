@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.IO;
 using System.Net.Http.Headers;
+using System.Linq;
 using DotNetEnv;
 
 class Program
@@ -45,9 +46,9 @@ class Program
                 case "4":
                     await ListImages();
                     break;
-                // case "5":
-                //     await CaptionImage();
-                //     break;
+                case "5":
+                    await CaptionImage();
+                    break;
                 case "6":
                     await UploadPhoto();
                     break;
@@ -83,10 +84,10 @@ class Program
         Console.WriteLine("║ 2. Caption a video by ID               ║");
         Console.WriteLine("║ 3. Upload a video                      ║");
         Console.WriteLine("║  ------------------------------------  ║");
-        // Console.WriteLine("║ 4. List images                         ║");
-        // Console.WriteLine("║ 5. Caption a image by ID               ║");
-        // Console.WriteLine("║ 6. Upload a image                      ║");
-        // Console.WriteLine("║  ------------------------------------  ║");
+        Console.WriteLine("║ 4. List images                         ║");
+        Console.WriteLine("║ 5. Caption a image by URL              ║");
+        Console.WriteLine("║ 6. Upload a image                      ║");
+        Console.WriteLine("║  ------------------------------------  ║");
         Console.WriteLine("║ 7. Delete a video by ID                ║");
         Console.WriteLine("║  ------------------------------------  ║");
         Console.WriteLine("║ x. Exit                                ║");
@@ -100,34 +101,82 @@ class Program
         await DisplayVideosResponse(response);
     }
 
-    // static async Task CaptionImage()
-    // {
-    //     Console.WriteLine("\n🎬 Caption a image by ID\n");
-    //     Console.Write("Enter image ID: ");
-    //     string? imageId = Console.ReadLine();
+    static async Task CaptionImage()
+    {
+        Console.WriteLine("\n🖼️  Caption an image by URL\n");
+        Console.Write("Enter image URL: ");
+        string? imageUrl = Console.ReadLine();
 
-    //     if (string.IsNullOrWhiteSpace(imageId))
-    //     {
-    //         Console.WriteLine("Video ID is required.");
-    //         return;
-    //     }
+        if (string.IsNullOrWhiteSpace(imageUrl))
+        {
+            Console.WriteLine("Image URL is required.");
+            return;
+        }
 
-    //     var requestBody = new
-    //     {
-    //         image_id = imageId,
-    //         messages = new[]
-    //         {
-    //             new
-    //             {
-    //                 role = "user",
-    //                 content = "Write a prompt that would generate this exact image using an AI image generation model"
-    //             }
-    //         }
-    //     };
+        try
+        {
+            var requestBody = new
+            {
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new
+                            {
+                                type = "image_url",
+                                image_url = imageUrl
+                            },
+                            new
+                            {
+                                type = "text",
+                                text = "Write a prompt, in plain text (no marldown), that would generate this exact image using an AI image generation model. Be detailed in your description, the sublect, the colors, the lighting, the mood, and the style., the style of the image."
+                            }
+                        }
+                    }
+                },
+                model = "reka-flash"
+            };
 
-    //     var response = await SendRequest("/qa/chat", requestBody);
-    //     await DisplayQAResponse(response);
-    // }
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.reka.ai/v1/chat/completions")
+            {
+                Content = content
+            };
+            request.Headers.Add("X-Api-Key", apiKey);
+
+            var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            var responseJson = JsonDocument.Parse(body);
+
+            if (responseJson.RootElement.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array)
+            {
+                var firstChoice = choices.EnumerateArray().FirstOrDefault();
+                if (firstChoice.TryGetProperty("message", out var message) && 
+                    message.TryGetProperty("content", out var contentText))
+                {
+                    var caption = contentText.GetString() ?? "";
+                    await SaveToFile(caption, "image_captioned.json");
+                    Console.WriteLine(caption);
+                }
+                else
+                {
+                    await DisplayResponse(response);
+                }
+            }
+            else
+            {
+                await DisplayResponse(response);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error: {ex.Message}");
+        }
+    }
 
     static async Task CaptionVideo()
     {

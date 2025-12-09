@@ -1,6 +1,8 @@
 
 @VIDEO_ID=e16cb196-fd7a-4ec1-b1ca-67321915d4dc
 
+@IMAGE_URL=https://guardian-user-uploads-prod.cdn.reka.ai/88563e20-2f3c-4e6d-b802-03121524c1a1/images/5f8604b1a7962408d6240957f38ca935/test-a.png
+
 
 ### Get all videos in library  ====================================
 POST https://vision-agent.api.reka.ai/videos/list
@@ -40,6 +42,46 @@ Content-Type: application/json
 }
 
 
+### Caption a video by ID  ====================================
+POST https://vision-agent.api.reka.ai/images/chat
+X-Api-Key: {{API_KEY}}
+Content-Type: application/json
+
+{
+    "image_id": "{{VIDEO_ID}}",
+    "messages": [
+        {
+        "role": "user",
+        "content": "Write a prompt, in plain text (no marldown), that would generate this exact image using an AI image generation model"
+        }
+    ]
+}
+
+
+
+### Caption a image by URL  ====================================
+POST https://api.reka.ai/v1/chat/completions
+X-Api-Key: {{API_KEY}}
+Content-Type: application/json
+
+{
+    "messages": [
+        {
+            "role":"user",
+            "content": [
+                {
+                    "type": "image_url", 
+                    "image_url": "{{IMAGE_URL}}"
+                },
+                {
+                    "type": "text", 
+                    "text": "Write a prompt, in plain text (no marldown), that would generate this exact image using an AI image generation model. Be detailed in your description, the sublect, the colors, the lighting, the mood, and the style., the style of the image."
+                }
+            ]
+        }
+    ],
+    "model": "reka-flash"
+}
 
 
 ### Upload a video ====================================
