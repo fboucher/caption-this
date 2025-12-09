@@ -1,7 +1,5 @@
 
 @VIDEO_ID=e16cb196-fd7a-4ec1-b1ca-67321915d4dc
-@RESPONSE_FORMAT=- Subject: [Detailed character/object description with 15+ specific physical attributes, clothing, age, build, facial features, ethnicity, hair, eyes, posture, mannerisms, emotional state] -Action: [Specific actions, movements, gestures, behaviors, timing, sequence, transitions, micro-expressions, body language, interaction patterns]- Scene: [Detailed environment description including location, props, background elements, lighting setup, weather, time of day, architectural details]- Style: [Camera shot type, angle, movement, lighting style, visual aesthetic, aspect ratio, film grade, color palette, depth of field, focus techniques]
-
 
 
 ### Get all videos in library  ====================================
@@ -13,6 +11,19 @@ Content-Type: application/json
     "video_ids": []
 }
 
+
+### List in images  ====================================
+POST https://vision-agent.api.reka.ai/images/list
+X-Api-Key: {{API_KEY}}
+Content-Type: application/json
+
+{
+    "video_ids": []
+}
+
+
+
+
 ### Caption a video by ID  ====================================
 POST https://vision-agent.api.reka.ai/qa/chat
 X-Api-Key: {{API_KEY}}
@@ -23,10 +34,12 @@ Content-Type: application/json
     "messages": [
         {
         "role": "user",
-        "content": "What is happening in this video? Reply using text only (no markdown) filling those 4 sections {{RESPONSE_FORMAT}}"
+        "content": "Write a prompt, in plain text (no marldown), that would generate this exact video using an AI image generation model"
         }
     ]
 }
+
+
 
 
 ### Upload a video ====================================

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -10,15 +9,12 @@ using DotNetEnv;
 
 class Program
 {
-    private static readonly HttpClient client = new HttpClient();
+    private static readonly HttpClient client = new();
     private static string apiKey = "";
-    private static string baseUrl = "https://vision-agent.api.reka.ai";
+    private static readonly string baseUrl = "https://vision-agent.api.reka.ai";
     
-    private static readonly string responseFormat = @"- Subject: [Detailed character/object description with 15+ specific physical attributes, clothing, age, build, facial features, ethnicity, hair, eyes, posture, mannerisms, emotional state] -Action: [Specific actions, movements, gestures, behaviors, timing, sequence, transitions, micro-expressions, body language, interaction patterns]- Scene: [Detailed environment description including location, props, background elements, lighting setup, weather, time of day, architectural details]- Style: [Camera shot type, angle, movement, lighting style, visual aesthetic, aspect ratio, film grade, color palette, depth of field, focus techniques]";
-
     static async Task Main(string[] args)
     {
-
         Env.TraversePath().Load();
         apiKey = Environment.GetEnvironmentVariable("API_KEY")!;
 
@@ -32,13 +28,13 @@ class Program
         while (running)
         {
             DisplayMenu();
-            Console.Write("\nSelect an option (1-6): ");
+            Console.Write("\nSelect an option (1-7): ");
             string? choice = Console.ReadLine();
 
             switch (choice)
             {
                 case "1":
-                    await GetAllVideos();
+                    await ListVideos();
                     break;
                 case "2":
                     await CaptionVideo();
@@ -47,12 +43,18 @@ class Program
                     await UploadVideo();
                     break;
                 case "4":
+                    await ListImages();
+                    break;
+                // case "5":
+                //     await CaptionImage();
+                //     break;
+                case "6":
                     await UploadPhoto();
                     break;
-                case "5":
+                case "7":
                     await DeleteVideo();
                     break;
-                case "6":
+                case "x":
                     running = false;
                     Console.WriteLine("\nGoodbye!");
                     break;
@@ -70,87 +72,90 @@ class Program
         }
     }
 
+
+
     static void DisplayMenu()
     {
         Console.WriteLine("\n╔════════════════════════════════════════╗");
         Console.WriteLine("║         Caption This - Main Menu       ║");
         Console.WriteLine("╠════════════════════════════════════════╣");
-        Console.WriteLine("║ 1. Get all videos in library           ║");
+        Console.WriteLine("║ 1. List videos                         ║");
         Console.WriteLine("║ 2. Caption a video by ID               ║");
         Console.WriteLine("║ 3. Upload a video                      ║");
-        Console.WriteLine("║ 4. Upload a photo                      ║");
-        Console.WriteLine("║ 5. Delete a video by ID                ║");
-        Console.WriteLine("║ 6. Exit                                ║");
+        Console.WriteLine("║  ------------------------------------  ║");
+        // Console.WriteLine("║ 4. List images                         ║");
+        // Console.WriteLine("║ 5. Caption a image by ID               ║");
+        // Console.WriteLine("║ 6. Upload a image                      ║");
+        // Console.WriteLine("║  ------------------------------------  ║");
+        Console.WriteLine("║ 7. Delete a video by ID                ║");
+        Console.WriteLine("║  ------------------------------------  ║");
+        Console.WriteLine("║ x. Exit                                ║");
         Console.WriteLine("╚════════════════════════════════════════╝");
     }
 
-    static async Task GetAllVideos()
+    static async Task ListVideos()
     {
-        try
-        {
-            Console.WriteLine("\n📹 Getting all videos in library...\n");
-
-            var requestBody = new { video_ids = Array.Empty<string>() };
-            var json = JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/videos/list")
-            {
-                Content = content
-            };
-            request.Headers.Add("X-Api-Key", apiKey);
-
-            var response = await client.SendAsync(request);
-            await DisplayResponse(response);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error: {ex.Message}");
-        }
+        Console.WriteLine("\n📹 Getting all videos in library...\n");
+        var response = await SendRequest("/videos/list", new { video_ids = Array.Empty<string>() });
+        await DisplayVideosResponse(response);
     }
+
+    // static async Task CaptionImage()
+    // {
+    //     Console.WriteLine("\n🎬 Caption a image by ID\n");
+    //     Console.Write("Enter image ID: ");
+    //     string? imageId = Console.ReadLine();
+
+    //     if (string.IsNullOrWhiteSpace(imageId))
+    //     {
+    //         Console.WriteLine("Video ID is required.");
+    //         return;
+    //     }
+
+    //     var requestBody = new
+    //     {
+    //         image_id = imageId,
+    //         messages = new[]
+    //         {
+    //             new
+    //             {
+    //                 role = "user",
+    //                 content = "Write a prompt that would generate this exact image using an AI image generation model"
+    //             }
+    //         }
+    //     };
+
+    //     var response = await SendRequest("/qa/chat", requestBody);
+    //     await DisplayQAResponse(response);
+    // }
 
     static async Task CaptionVideo()
     {
-        try
-        {
-            Console.WriteLine("\n🎬 Caption a video by ID\n");
-            Console.Write("Enter video ID: ");
-            string? videoId = Console.ReadLine();
+        Console.WriteLine("\n🎬 Caption a video by ID\n");
+        Console.Write("Enter video ID: ");
+        string? videoId = Console.ReadLine();
 
-            if (string.IsNullOrWhiteSpace(videoId))
+        if (string.IsNullOrWhiteSpace(videoId))
+        {
+            Console.WriteLine("Video ID is required.");
+            return;
+        }
+
+        var requestBody = new
+        {
+            video_id = videoId,
+            messages = new[]
             {
-                Console.WriteLine("Video ID is required.");
-                return;
+                new
+                {
+                    role = "user",
+                    content = "Write a prompt, in plain text (no marldown), that would generate this exact video using an AI image generation model"
+                }
             }
+        };
 
-            var message = new
-            {
-                role = "user",
-                content = $"What is happening in this video? Reply using text only (no markdown) filling those 4 sections: {responseFormat}"
-            };
-
-            var requestBody = new
-            {
-                video_id = videoId,
-                messages = new[] { message }
-            };
-
-            var json = JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/qa/chat")
-            {
-                Content = content
-            };
-            request.Headers.Add("X-Api-Key", apiKey);
-
-            var response = await client.SendAsync(request);
-            await DisplayQAResponse(response);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error: {ex.Message}");
-        }
+        var response = await SendRequest("/qa/chat", requestBody);
+        await DisplayQAResponse(response);
     }
 
     static async Task UploadVideo()
@@ -250,119 +255,148 @@ class Program
 
     static async Task DeleteVideo()
     {
-        try
+        Console.WriteLine("\n🗑️  Delete a video by ID\n");
+        Console.Write("Enter video ID to delete: ");
+        string? videoId = Console.ReadLine();
+
+        if (string.IsNullOrWhiteSpace(videoId))
         {
-            Console.WriteLine("\n🗑️  Delete a video by ID\n");
-            Console.Write("Enter video ID to delete: ");
-            string? videoId = Console.ReadLine();
-
-            if (string.IsNullOrWhiteSpace(videoId))
-            {
-                Console.WriteLine("Video ID is required.");
-                return;
-            }
-
-            var requestBody = new { video_ids = new[] { videoId } };
-            var json = JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/videos/delete")
-            {
-                Content = content
-            };
-            request.Headers.Add("X-Api-Key", apiKey);
-
-            var response = await client.SendAsync(request);
-            await DisplayResponse(response);
+            Console.WriteLine("Video ID is required.");
+            return;
         }
-        catch (Exception ex)
+
+        var response = await SendRequest("/videos/delete", new { video_ids = new[] { videoId } });
+        await DisplayResponse(response);
+    }
+
+    static async Task DisplayVideosResponse(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(body);
+
+        if (json.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
         {
-            Console.WriteLine($"❌ Error: {ex.Message}");
+            Console.WriteLine($"{"Video ID",-40} {"Video Name"}");
+            Console.WriteLine(new string('-', 80));
+
+            foreach (var video in results.EnumerateArray())
+            {
+                var id = video.TryGetProperty("video_id", out var idEl) ? idEl.GetString() ?? "N/A" : "N/A";
+                var name = video.TryGetProperty("metadata", out var meta) && meta.TryGetProperty("video_name", out var nameEl) 
+                    ? nameEl.GetString() ?? "N/A" : "N/A";
+                Console.WriteLine($"{id,-40} {name}");
+            }
+        }
+        else
+        {
+            Console.WriteLine(JsonSerializer.Serialize(json.RootElement, new JsonSerializerOptions { WriteIndented = true }));
         }
     }
 
     static async Task DisplayResponse(HttpResponseMessage response)
     {
-        Console.WriteLine($"Status Code: {response.StatusCode}");
-        string responseBody = await response.Content.ReadAsStringAsync();
-
+        var body = await response.Content.ReadAsStringAsync();
         try
         {
-            var jsonDocument = JsonDocument.Parse(responseBody);
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string prettyJson = JsonSerializer.Serialize(jsonDocument.RootElement, options);
-            Console.WriteLine(prettyJson);
+            var json = JsonDocument.Parse(body);
+            Console.WriteLine(JsonSerializer.Serialize(json.RootElement, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch
         {
-            Console.WriteLine(responseBody);
+            Console.WriteLine(body);
         }
     }
-
-
 
     static async Task DisplayQAResponse(HttpResponseMessage response)
     {
-        Console.WriteLine($"Status Code: {response.StatusCode}");
-        string responseBody = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(body);
         
-        // await SaveToFile(responseBody, "raw_captioned.json");
-
-        try
+        if (json.RootElement.TryGetProperty("chat_response", out var chatResponse))
         {
-            var jsonDocument = JsonDocument.Parse(responseBody);
-            
-            if (jsonDocument.RootElement.TryGetProperty("chat_response", out JsonElement chatResponseElement))
+            var chatJson = JsonDocument.Parse(chatResponse.GetString() ?? "");
+            var text = new StringBuilder();
+
+            if (chatJson.RootElement.TryGetProperty("sections", out var sections) && sections.ValueKind == JsonValueKind.Array)
             {
-                string chatResponseString = chatResponseElement.GetString() ?? "";
-
-                var chatResponseDoc = JsonDocument.Parse(chatResponseString);
-
-                var stringBuilder = new StringBuilder();
-
-                if (chatResponseDoc.RootElement.TryGetProperty("sections", out JsonElement sectionsElement)
-                    && sectionsElement.ValueKind == JsonValueKind.Array)
+                foreach (var section in sections.EnumerateArray())
                 {
-                    foreach (JsonElement section in sectionsElement.EnumerateArray())
+                    if (section.TryGetProperty("markdown", out var markdown))
                     {
-                        if (section.TryGetProperty("markdown", out JsonElement markdownElement))
-                        {
-                            string? markdown = markdownElement.GetString();
-                            if (!string.IsNullOrEmpty(markdown))
-                            {
-                                stringBuilder.Append(markdown);
-                            }
-                        }
+                        text.Append(markdown.GetString());
                     }
                 }
+            }
 
-                string cleanText = stringBuilder.ToString();
-                await SaveToFile(cleanText, "video_captioned.json");
-                Console.WriteLine(cleanText);
-            }
-            else
-            {
-                // Fallback to original behavior if structure is different
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                string prettyJson = JsonSerializer.Serialize(jsonDocument.RootElement, options);
-                
-                await SaveToFile(prettyJson, "video_bak_captioned.json");
-                Console.WriteLine(prettyJson);
-            }
+            var caption = text.ToString();
+            await SaveToFile(caption, "video_captioned.json");
+            Console.WriteLine(caption);
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"⚠️  Error parsing response: {ex.Message}");
-            Console.WriteLine(responseBody);
+            Console.WriteLine(JsonSerializer.Serialize(json.RootElement, new JsonSerializerOptions { WriteIndented = true }));
         }
     }
 
-    private static async Task SaveToFile(string cleanJson, string fileName)
+    static async Task ListImages()
     {
-        string dataFolder = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data");
+        Console.WriteLine("\n🖼️  Getting all images in library...\n");
+        var response = await SendRequest("/images/list", new { image_ids = Array.Empty<string>() });
+        await DisplayImagesResponse(response);
+    }
+
+    static async Task DisplayImagesResponse(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(body);
+
+        if (json.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+        {
+            var count = results.GetArrayLength();
+            Console.WriteLine($"Found {count} image(s)\n");
+            
+            if (count > 0)
+            {
+                Console.WriteLine($"{"Image ID",-40} {"Image URL"}");
+                Console.WriteLine(new string('-', 120));
+
+                foreach (var image in results.EnumerateArray())
+                {
+                    var id = image.TryGetProperty("image_id", out var idEl) ? idEl.GetString() ?? "N/A" : "N/A";
+                    var url = image.TryGetProperty("image_url", out var urlEl) ? urlEl.GetString() ?? "N/A" : "N/A";
+                    Console.WriteLine($"{id,-40} {url}");
+                }
+            }
+        }
+        else
+        {
+            Console.WriteLine(JsonSerializer.Serialize(json.RootElement, new JsonSerializerOptions { WriteIndented = true }));
+        }
+    }
+
+    static async Task<HttpResponseMessage> SendRequest(string endpoint, object body)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(body);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}{endpoint}") { Content = content };
+            request.Headers.Add("X-Api-Key", apiKey);
+            return await client.SendAsync(request);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error: {ex.Message}");
+            throw;
+        }
+    }
+
+    static async Task SaveToFile(string content, string fileName)
+    {
+        var dataFolder = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data");
         Directory.CreateDirectory(dataFolder);
-        string filePath = Path.Combine(dataFolder, fileName);
-        await File.WriteAllTextAsync(filePath, cleanJson);
+        var filePath = Path.Combine(dataFolder, fileName);
+        await File.WriteAllTextAsync(filePath, content);
         Console.WriteLine($"\n✅ Response saved to {filePath}\n");
     }
 }
