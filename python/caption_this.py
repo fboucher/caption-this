@@ -1,6 +1,14 @@
+#!/usr/bin/env python3
+"""
+Caption This - Automated video captioning tool
+Takes an MP4 file as input and generates descriptive captions using the Reka Vision API.
+"""
+
 import os
-import json
+import sys
+import time
 import requests
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -9,239 +17,215 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 BASE_URL = "https://vision-agent.api.reka.ai"
 
-def display_menu():
-    print("\n╔════════════════════════════════════════╗")
-    print("║         Caption This - Main Menu       ║")
-    print("╠════════════════════════════════════════╣")
-    print("║ 1. List videos                         ║")
-    print("║ 2. Caption a video by ID               ║")
-    print("║ 3. Upload a video                      ║")
-    print("║  ------------------------------------  ║")
-    print("║ 4. List images                         ║")
-    print("║ 5. Caption a image by URL              ║")
-    print("║ 6. Upload a image                      ║")
-    print("║  ------------------------------------  ║")
-    print("║ 7. Delete a video by ID                ║")
-    print("║  ------------------------------------  ║")
-    print("║ x. Exit                                ║")
-    print("╚════════════════════════════════════════╝")
+def print_step(step_num, message):
+    """Print a formatted step message"""
+    print(f"\n[Step {step_num}] {message}")
 
-def send_request(endpoint, body):
+def print_status(message):
+    """Print a status message"""
+    print(f"  ✓ {message}")
+
+def print_wait(message):
+    """Print a waiting message"""
+    print(f"  ⏳ {message}")
+
+def upload_video(file_path):
+    """Upload a video file and return the video_id"""
+    print_step(1, "Uploading video...")
+    
+    if not os.path.exists(file_path):
+        print(f"  ✗ Error: File not found: {file_path}")
+        sys.exit(1)
+    
+    file_name = os.path.basename(file_path)
+    print_status(f"Uploading {file_name}")
+    
+    headers = {
+        "X-Api-Key": API_KEY
+    }
+    
+    with open(file_path, 'rb') as f:
+        files = {
+            'file': (file_name, f, 'video/mp4'),
+            'video_name': (None, file_name),
+            'index': (None, 'true')
+        }
+        
+        response = requests.post(
+            f"{BASE_URL}/videos/upload",
+            headers=headers,
+            files=files
+        )
+    
+    if response.status_code != 200:
+        print(f"  ✗ Error uploading video: {response.status_code}")
+        print(f"  Response: {response.text}")
+        sys.exit(1)
+    
+    data = response.json()
+    video_id = data.get("video_id")
+    
+    if not video_id:
+        print(f"  ✗ Error: No video_id in response")
+        print(f"  Response: {json.dumps(data, indent=2)}")
+        sys.exit(1)
+    
+    print_status(f"Video uploaded successfully")
+    print_status(f"Video ID: {video_id}")
+    
+    return video_id
+
+def wait_for_indexing(video_id, max_attempts=60):
+    """Poll the API until the video is indexed"""
+    print_step(2, "Waiting for video indexing...")
+    
     headers = {
         "X-Api-Key": API_KEY,
         "Content-Type": "application/json"
     }
-    response = requests.post(f"{BASE_URL}{endpoint}", json=body, headers=headers)
-    return response
-
-def save_to_file(content, filename):
-    data_folder = Path(__file__).parent / "data"
-    data_folder.mkdir(exist_ok=True)
-    file_path = data_folder / filename
-    with open(file_path, "w") as f:
-        f.write(content)
-    print(f"\n✅ Response saved to {file_path}\n")
-
-def list_videos():
-    print("\n📹 Getting all videos in library...\n")
-    response = send_request("/videos/list", {"video_ids": []})
-    data = response.json()
     
-    if "results" in data:
-        print(f"{'Video ID':<40} {'Video Name'}")
-        print("-" * 80)
-        for video in data["results"]:
-            video_id = video.get("video_id", "N/A")
-            video_name = video.get("metadata", {}).get("video_name", "N/A")
-            print(f"{video_id:<40} {video_name}")
-    else:
-        print(json.dumps(data, indent=2))
-
-def caption_video():
-    print("\n🎬 Caption a video by ID\n")
-    video_id = input("Enter video ID: ").strip()
+    attempt = 0
+    while attempt < max_attempts:
+        response = requests.post(
+            f"{BASE_URL}/videos/list",
+            headers=headers,
+            json={"video_ids": [video_id]}
+        )
+        
+        if response.status_code != 200:
+            print(f"  ✗ Error checking indexing status: {response.status_code}")
+            sys.exit(1)
+        
+        data = response.json()
+        
+        if "results" in data and len(data["results"]) > 0:
+            video = data["results"][0]
+            indexing_status = video.get("indexing_status", "unknown")
+            
+            print_wait(f"Indexing status: {indexing_status} (attempt {attempt + 1}/{max_attempts})")
+            
+            if indexing_status == "indexed":
+                print_status("Video indexing complete!")
+                return True
+        
+        attempt += 1
+        time.sleep(2)  # Wait 2 seconds before checking again
     
-    if not video_id:
-        print("Video ID is required.")
-        return
+    print(f"  ✗ Error: Video indexing timed out after {max_attempts * 2} seconds")
+    sys.exit(1)
+
+def get_caption(video_id):
+    """Get a caption for the video using qa/chat"""
+    print_step(3, "Generating caption...")
+    
+    headers = {
+        "X-Api-Key": API_KEY,
+        "Content-Type": "application/json"
+    }
+    
+    prompt = """Describe this video clearly and concisely in 2-3 sentences. 
+    Include the main subject, key actions, setting, and visual style.
+    Use plain text without markdown formatting."""
     
     request_body = {
         "video_id": video_id,
         "messages": [{
             "role": "user",
-            "content": "Write a prompt, in plain text (no markdown), that would generate this exact video using an AI image generation model"
+            "content": prompt
         }]
     }
     
-    response = send_request("/qa/chat", request_body)
+    print_wait("Requesting caption from API...")
+    
+    response = requests.post(
+        f"{BASE_URL}/qa/chat",
+        headers=headers,
+        json=request_body
+    )
+    
+    if response.status_code != 200:
+        print(f"  ✗ Error getting caption: {response.status_code}")
+        print(f"  Response: {response.text}")
+        sys.exit(1)
+    
     data = response.json()
     
+    # Extract the caption from the response
+    caption = ""
     if "chat_response" in data:
-        chat_json = json.loads(data["chat_response"])
-        caption = ""
-        if "sections" in chat_json:
-            for section in chat_json["sections"]:
-                if "markdown" in section:
-                    caption += section["markdown"]
-        save_to_file(caption, "video_captioned.json")
-        print(caption)
-    else:
-        print(json.dumps(data, indent=2))
+        try:
+            chat_json = json.loads(data["chat_response"])
+            if "sections" in chat_json:
+                for section in chat_json["sections"]:
+                    if "markdown" in section:
+                        caption += section["markdown"]
+        except (json.JSONDecodeError, KeyError):
+            caption = data.get("chat_response", "")
+    
+    if not caption:
+        print(f"  ✗ Error: Could not extract caption from response")
+        print(f"  Response: {json.dumps(data, indent=2)}")
+        sys.exit(1)
+    
+    print_status("Caption generated successfully!")
+    
+    return caption
 
-def upload_video():
-    print("\n📤 Upload a video\n")
-    print(f"Current folder: {os.getcwd()}\n")
-    file_path = input("Enter video file path: ").strip()
+def save_caption(video_id, caption, file_path):
+    """Save the caption to a JSON file"""
+    print_step(4, "Saving caption...")
     
-    if not file_path or not os.path.exists(file_path):
-        print("File not found.")
-        return
-    
-    file_name = os.path.basename(file_path)
-    
-    with open(file_path, "rb") as f:
-        files = {"file": (file_name, f, "video/mp4")}
-        data = {
-            "video_name": file_name,
-            "index": "true"
-        }
-        headers = {"X-Api-Key": API_KEY}
-        
-        response = requests.post(f"{BASE_URL}/videos/upload", files=files, data=data, headers=headers)
-        print(json.dumps(response.json(), indent=2))
-
-def list_images():
-    print("\n🖼️  Getting all images in library...\n")
-    response = send_request("/images/list", {"image_ids": []})
-    data = response.json()
-    
-    if "results" in data:
-        count = len(data["results"])
-        print(f"Found {count} image(s)\n")
-        
-        if count > 0:
-            print(f"{'Image ID':<40} {'Image URL'}")
-            print("-" * 120)
-            for image in data["results"]:
-                image_id = image.get("image_id", "N/A")
-                image_url = image.get("image_url", "N/A")
-                print(f"{image_id:<40} {image_url}")
-    else:
-        print(json.dumps(data, indent=2))
-
-def caption_image():
-    print("\n🖼️  Caption an image by URL\n")
-    image_url = input("Enter image URL: ").strip()
-    
-    if not image_url:
-        print("Image URL is required.")
-        return
-    
-    request_body = {
-        "messages": [{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": image_url
-                },
-                {
-                    "type": "text",
-                    "text": "Write a prompt, in plain text (no markdown), that would generate this exact image using an AI image generation model. Be detailed in your description, the subject, the colors, the lighting, the mood, and the style., the style of the image."
-                }
-            ]
-        }],
-        "model": "reka-flash"
+    data = {
+        "video_id": video_id,
+        "caption": caption,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }
     
-    headers = {
-        "X-Api-Key": API_KEY,
-        "Content-Type": "application/json"
-    }
+    output_dir = Path(file_path).parent / "captions"
+    output_dir.mkdir(exist_ok=True)
     
-    response = requests.post("https://api.reka.ai/v1/chat/completions", json=request_body, headers=headers)
-    data = response.json()
+    output_file = output_dir / f"{Path(file_path).stem}_caption.json"
     
-    if "choices" in data and len(data["choices"]) > 0:
-        caption = data["choices"][0]["message"]["content"]
-        save_to_file(caption, "image_captioned.json")
-        print(caption)
-    else:
-        print(json.dumps(data, indent=2))
-
-def upload_photo():
-    print("\n🖼️  Upload a photo\n")
-    print(f"Current folder: {os.getcwd()}\n")
-    file_path = input("Enter photo file path: ").strip()
+    with open(output_file, 'w') as f:
+        json.dump(data, f, indent=2)
     
-    if not file_path or not os.path.exists(file_path):
-        print("File not found.")
-        return
-    
-    file_name = os.path.basename(file_path)
-    content_type = "image/png" if file_path.endswith(".png") else "image/jpeg"
-    
-    with open(file_path, "rb") as f:
-        files = {"images": (file_name, f, content_type)}
-        metadata = {
-            "requests": [{
-                "indexing_config": {"index": True},
-                "metadata": {}
-            }]
-        }
-        data = {"metadata": json.dumps(metadata)}
-        headers = {"X-Api-Key": API_KEY}
-        
-        response = requests.post(f"{BASE_URL}/images/upload", files=files, data=data, headers=headers)
-        print(json.dumps(response.json(), indent=2))
-
-def delete_video():
-    print("\n🗑️  Delete a video by ID\n")
-    video_id = input("Enter video ID to delete: ").strip()
-    
-    if not video_id:
-        print("Video ID is required.")
-        return
-    
-    response = send_request("/videos/delete", {"video_ids": [video_id]})
-    print(json.dumps(response.json(), indent=2))
+    print_status(f"Caption saved to {output_file}")
 
 def main():
-    if not API_KEY:
-        print("API Key is required. Exiting...")
-        return
+    """Main function"""
+    if len(sys.argv) < 2:
+        print("Usage: python caption_this.py <video_file.mp4>")
+        print("\nThis tool will:")
+        print("  1. Upload the video to the Reka Vision API")
+        print("  2. Wait for the video to be indexed")
+        print("  3. Generate a descriptive caption")
+        print("  4. Save the caption to a JSON file")
+        sys.exit(1)
     
-    running = True
-    while running:
-        display_menu()
-        choice = input("\nSelect an option (1-7): ").strip()
-        
-        try:
-            if choice == "1":
-                list_videos()
-            elif choice == "2":
-                caption_video()
-            elif choice == "3":
-                upload_video()
-            elif choice == "4":
-                list_images()
-            elif choice == "5":
-                caption_image()
-            elif choice == "6":
-                upload_photo()
-            elif choice == "7":
-                delete_video()
-            elif choice == "x":
-                running = False
-                print("\nGoodbye!")
-            else:
-                print("\nInvalid option. Please try again.")
-        except Exception as e:
-            print(f"❌ Error: {e}")
-        
-        if running:
-            input("\nPress Enter to continue...")
-            os.system('clear' if os.name == 'posix' else 'cls')
+    video_file = sys.argv[1]
+    
+    print("\n" + "="*60)
+    print("Caption This - Video Captioning Tool")
+    print("="*60)
+    
+    # Step 1: Upload video
+    video_id = upload_video(video_file)
+    
+    # Step 2: Wait for indexing
+    wait_for_indexing(video_id)
+    
+    # Step 3: Get caption
+    caption = get_caption(video_id)
+    
+    # Step 4: Save caption
+    save_caption(video_id, caption, video_file)
+    
+    # Display the caption
+    print("\n" + "="*60)
+    print("Generated Caption:")
+    print("="*60)
+    print(caption)
+    print("="*60 + "\n")
 
 if __name__ == "__main__":
     main()
