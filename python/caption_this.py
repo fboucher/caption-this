@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Caption This - Automated video captioning tool
-Takes an MP4 file as input and generates descriptive captions using the Reka Vision API.
-"""
 
 import os
 import sys
@@ -12,7 +8,7 @@ import json
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables
+
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
 BASE_URL = "https://vision-agent.api.reka.ai"
@@ -195,11 +191,6 @@ def main():
     """Main function"""
     if len(sys.argv) < 2:
         print("Usage: python caption_this.py <video_file.mp4>")
-        print("\nThis tool will:")
-        print("  1. Upload the video to the Reka Vision API")
-        print("  2. Wait for the video to be indexed")
-        print("  3. Generate a descriptive caption")
-        print("  4. Save the caption to a JSON file")
         sys.exit(1)
     
     video_file = sys.argv[1]
