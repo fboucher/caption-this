@@ -8,7 +8,7 @@ load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-prompt = """____HERE_GOES_THE_PROMPT____"""
+prompt = """a video of somene preparing food in a industrial kitchen with vegetable and other things, egocentric camera view, high quality, realistic lighting, detailed textures"""
 
 operation = client.models.generate_videos(
     model="veo-3.1-generate-preview",

@@ -3,11 +3,16 @@ import json
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
+from enum import Enum
 
 # Load environment variables
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
 BASE_URL = "https://vision-agent.api.reka.ai"
+
+class CaptionPromptType(Enum):
+    DETAILED = "detailed"
+    SHORT = "short"
 
 def display_menu():
     print("\n╔════════════════════════════════════════╗")
@@ -15,13 +20,15 @@ def display_menu():
     print("╠════════════════════════════════════════╣")
     print("║ 1. List videos                         ║")
     print("║ 2. Caption a video by ID               ║")
-    print("║ 3. Upload a video                      ║")
+    print("║ 3. Reverse engineer a video by ID      ║")
+    print("║ 4. Upload a video                      ║")
     print("║  ------------------------------------  ║")
-    print("║ 4. List images                         ║")
-    print("║ 5. Caption a image by URL              ║")
-    print("║ 6. Upload a image                      ║")
+    print("║ 5. List images                         ║")
+    print("║ 6. Caption an image by URL             ║")
+    print("║ 7. Reverse engineer an image by URL    ║")
+    print("║ 8. Upload an image                     ║")
     print("║  ------------------------------------  ║")
-    print("║ 7. Delete a video by ID                ║")
+    print("║ 9. Delete a video by ID                ║")
     print("║  ------------------------------------  ║")
     print("║ x. Exit                                ║")
     print("╚════════════════════════════════════════╝")
@@ -57,7 +64,7 @@ def list_videos():
     else:
         print(json.dumps(data, indent=2))
 
-def caption_video():
+def caption_video(prompt_type=CaptionPromptType.DETAILED):
     print("\n🎬 Caption a video by ID\n")
     video_id = input("Enter video ID: ").strip()
     
@@ -65,11 +72,17 @@ def caption_video():
         print("Video ID is required.")
         return
     
+    # Select prompt based on enum
+    if prompt_type == CaptionPromptType.DETAILED:
+        prompt = """write a text description that could be used to recreate this video as accurately as possible using an AI video generation model. Include details about: the video (aspect ratio, composition, style, motion, pacing, type of lighting, camera point of view, it's position related to the subject), objects descriptions (colors, location), and a description of what is happening and the interactions between objects in the video."""
+    else:  # SHORT
+        prompt = "Write a short description of this video in 2-3 sentences."
+    
     request_body = {
         "video_id": video_id,
         "messages": [{
             "role": "user",
-            "content": """write a text description that could be used to recreate this video as accurately as possible using an AI video generation model. Include details about: the video (aspect ratio, composition, style, motion, pacing, type of lighting, camera point of view, it's position related to the subject), objects descriptions (colors, location), and a description of what is happening and the interactions between objects in the video."""
+            "content": prompt
             }]
     }
     
@@ -129,13 +142,19 @@ def list_images():
     else:
         print(json.dumps(data, indent=2))
 
-def caption_image():
+def caption_image(prompt_type=CaptionPromptType.SHORT):
     print("\n🖼️  Caption an image by URL\n")
     image_url = input("Enter image URL: ").strip()
     
     if not image_url:
         print("Image URL is required.")
         return
+    
+    # Select prompt based on enum
+    if prompt_type == CaptionPromptType.DETAILED:
+        prompt_text = "Write a text description that could be used to recreate this image as accurately as possible using an AI image generation model. Include details about: the image (aspect ratio, composition, style, type of lighting), objects descriptions (colors, location, textures), and a description of what is happening and the interactions between objects or subjects in the image."
+    else:  # SHORT
+        prompt_text = "Describe this image in detail. Include style. In 1-2 sentences, 50 words or less."
     
     request_body = {
         "messages": [{
@@ -147,7 +166,7 @@ def caption_image():
                 },
                 {
                     "type": "text",
-                    "text": "Write a prompt, in plain text (no markdown), that would generate this exact image using an AI image generation model. Be detailed in your description, the subject, the colors, the lighting, the mood, and the style., the style of the image."
+                    "text": prompt_text
                 }
             ]
         }],
@@ -214,22 +233,26 @@ def main():
     running = True
     while running:
         display_menu()
-        choice = input("\nSelect an option (1-7): ").strip()
+        choice = input("\nSelect an option (1-9): ").strip()
         
         try:
             if choice == "1":
                 list_videos()
             elif choice == "2":
-                caption_video()
+                caption_video(CaptionPromptType.SHORT)
             elif choice == "3":
-                upload_video()
+                caption_video(CaptionPromptType.DETAILED)
             elif choice == "4":
-                list_images()
+                upload_video()
             elif choice == "5":
-                caption_image()
+                list_images()
             elif choice == "6":
-                upload_photo()
+                caption_image(CaptionPromptType.SHORT)
             elif choice == "7":
+                caption_image(CaptionPromptType.DETAILED)
+            elif choice == "8":
+                upload_photo()
+            elif choice == "9":
                 delete_video()
             elif choice == "x":
                 running = False
