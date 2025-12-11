@@ -8,6 +8,12 @@ using System.Net.Http.Headers;
 using System.Linq;
 using DotNetEnv;
 
+enum CaptionPromptType
+{
+    Detailed,
+    Short
+}
+
 class Program
 {
     private static readonly HttpClient client = new();
@@ -29,7 +35,7 @@ class Program
         while (running)
         {
             DisplayMenu();
-            Console.Write("\nSelect an option (1-7): ");
+            Console.Write("\nSelect an option (1-9): ");
             string? choice = Console.ReadLine();
 
             switch (choice)
@@ -38,21 +44,27 @@ class Program
                     await ListVideos();
                     break;
                 case "2":
-                    await CaptionVideo();
+                    await CaptionVideo(CaptionPromptType.Short);
                     break;
                 case "3":
-                    await UploadVideo();
+                    await CaptionVideo(CaptionPromptType.Detailed);
                     break;
                 case "4":
-                    await ListImages();
+                    await UploadVideo();
                     break;
                 case "5":
-                    await CaptionImage();
+                    await ListImages();
                     break;
                 case "6":
-                    await UploadPhoto();
+                    await CaptionImage(CaptionPromptType.Short);
                     break;
                 case "7":
+                    await CaptionImage(CaptionPromptType.Detailed);
+                    break;
+                case "8":
+                    await UploadPhoto();
+                    break;
+                case "9":
                     await DeleteVideo();
                     break;
                 case "x":
@@ -82,13 +94,15 @@ class Program
         Console.WriteLine("╠════════════════════════════════════════╣");
         Console.WriteLine("║ 1. List videos                         ║");
         Console.WriteLine("║ 2. Caption a video by ID               ║");
-        Console.WriteLine("║ 3. Upload a video                      ║");
+        Console.WriteLine("║ 3. Reverse engineer a video by ID      ║");
+        Console.WriteLine("║ 4. Upload a video                      ║");
         Console.WriteLine("║  ------------------------------------  ║");
-        Console.WriteLine("║ 4. List images                         ║");
-        Console.WriteLine("║ 5. Caption a image by URL              ║");
-        Console.WriteLine("║ 6. Upload a image                      ║");
+        Console.WriteLine("║ 5. List images                         ║");
+        Console.WriteLine("║ 6. Caption an image by URL             ║");
+        Console.WriteLine("║ 7. Reverse engineer an image by URL    ║");
+        Console.WriteLine("║ 8. Upload an image                     ║");
         Console.WriteLine("║  ------------------------------------  ║");
-        Console.WriteLine("║ 7. Delete a video by ID                ║");
+        Console.WriteLine("║ 9. Delete a video by ID                ║");
         Console.WriteLine("║  ------------------------------------  ║");
         Console.WriteLine("║ x. Exit                                ║");
         Console.WriteLine("╚════════════════════════════════════════╝");
@@ -101,7 +115,7 @@ class Program
         await DisplayVideosResponse(response);
     }
 
-    static async Task CaptionImage()
+    static async Task CaptionImage(CaptionPromptType promptType = CaptionPromptType.Short)
     {
         Console.WriteLine("\n🖼️  Caption an image by URL\n");
         Console.Write("Enter image URL: ");
@@ -115,6 +129,11 @@ class Program
 
         try
         {
+            // Select prompt based on enum
+            string promptText = promptType == CaptionPromptType.Detailed
+                ? "Write a text description that could be used to recreate this image as accurately as possible using an AI image generation model. Include details about: the image (aspect ratio, composition, style, type of lighting), objects descriptions (colors, location, textures), and a description of what is happening and the interactions between objects or subjects in the image."
+                : "Describe this image in detail. Include style. In 1-2 sentences, 50 words or less.";
+
             var requestBody = new
             {
                 messages = new[]
@@ -132,7 +151,7 @@ class Program
                             new
                             {
                                 type = "text",
-                                text = "Write a prompt, in plain text (no marldown), that would generate this exact image using an AI image generation model. Be detailed in your description, the sublect, the colors, the lighting, the mood, and the style., the style of the image."
+                                text = promptText
                             }
                         }
                     }
@@ -178,7 +197,7 @@ class Program
         }
     }
 
-    static async Task CaptionVideo()
+    static async Task CaptionVideo(CaptionPromptType promptType = CaptionPromptType.Short)
     {
         Console.WriteLine("\n🎬 Caption a video by ID\n");
         Console.Write("Enter video ID: ");
@@ -190,6 +209,11 @@ class Program
             return;
         }
 
+        // Select prompt based on enum
+        string prompt = promptType == CaptionPromptType.Detailed
+            ? "write a text description that could be used to recreate this video as accurately as possible using an AI video generation model. Include details about: the video (aspect ratio, composition, style, motion, pacing, type of lighting, camera point of view, it's position related to the subject), objects descriptions (colors, location), and a description of what is happening and the interactions between objects in the video."
+            : "Write a short description of this video in 2-3 sentences.";
+
         var requestBody = new
         {
             video_id = videoId,
@@ -198,7 +222,7 @@ class Program
                 new
                 {
                     role = "user",
-                    content = "Write a prompt, in plain text (no marldown), that would generate this exact video using an AI image generation model"
+                    content = prompt
                 }
             }
         };
